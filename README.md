@@ -1,2 +1,8 @@
-# news-agent
-Chrome Extensions / tsx
+# NAMPYO F/E
+
+
+## Start
+
+```
+pnpm start
+```
