@@ -4,5 +4,6 @@
 ## Start
 
 ```
+pnpm build
 pnpm start
 ```
