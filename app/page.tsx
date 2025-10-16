@@ -10,10 +10,38 @@ import { KeywordCloud } from "@/components/keyword-cloud"
 import { NewspaperComparison } from "@/components/newspaper-comparison"
 import { SentimentChart } from "@/components/sentiment-chart"
 import { NewsGrid } from "@/components/news-grid"
+import { useEffect } from "react"
+import { useSSE } from "@/hooks/use-sse"
 
 export default function NewsSummaryApp() {
-  const [selectedDate, setSelectedDate] = useState("2024.03.22")
+  const [selectedDate, setSelectedDate] = useState("로딩 중...")
   const [activeView, setActiveView] = useState("overview")
+  const SSE_ENDPOINT_URL =
+    process.env.NEXT_PUBLIC_SSE_ENDPOINT_URL || "http://127.0.0.1:8000/public/v1/news/sse"
+  const { lastMessage } = useSSE<any>(SSE_ENDPOINT_URL)
+
+  // RFC822 등 다양한 날짜 문자열을 'YYYY.MM.DD'로 정규화
+  const formatYMD = (dateStr?: string) => {
+    if (!dateStr) return undefined
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}.${m}.${day}`
+  }
+
+  useEffect(() => {
+    if (!lastMessage) return
+    // /sse 표준 응답: { lastBuildDate, items: [...] }
+    const lb = (lastMessage as any).lastBuildDate as string | undefined
+    const firstItem = Array.isArray((lastMessage as any).items)
+      ? (lastMessage as any).items[0]
+      : undefined
+    const pd = firstItem?.pubDate as string | undefined
+    const formatted = formatYMD(lb || pd)
+    if (formatted) setSelectedDate(formatted)
+  }, [lastMessage])
 
   return (
     <div className="min-h-screen bg-background">
