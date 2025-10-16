@@ -17,6 +17,15 @@ export function SentimentChart({ detailed = false }: SentimentChartProps) {
     { name: "경향신문", position: 20, articles: 16, color: "bg-chart-1" },
   ]
 
+  // Deterministic offset to avoid SSR/CSR hydration mismatch
+  const offsetTopPx = (seed: string) => {
+    // Simple string hash -> 0..1
+    let h = 0
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
+    const n = Math.abs(h % 1000) / 1000 // 0..0.999
+    return `${Math.floor(n * 40)}px` // 0..39px
+  }
+
   return (
     <div className="space-y-6">
       {/* Political Spectrum Chart */}
@@ -35,7 +44,7 @@ export function SentimentChart({ detailed = false }: SentimentChartProps) {
             <div
               key={item.name}
               className="absolute transform -translate-x-1/2"
-              style={{ left: `${item.position}%`, top: `${Math.random() * 40}px` }}
+              style={{ left: `${item.position}%`, top: offsetTopPx(item.name) }}
             >
               <div className={`w-3 h-3 ${item.color} rounded-full mb-1`} />
               <div className="text-xs text-center whitespace-nowrap">
