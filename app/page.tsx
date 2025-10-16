@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar, TrendingUp, Newspaper, BarChart3, Search, Filter } from "lucide-react"
 import { KeywordCloud } from "@/components/keyword-cloud"
@@ -16,9 +17,15 @@ import { useSSE } from "@/hooks/use-sse"
 export default function NewsSummaryApp() {
   const [selectedDate, setSelectedDate] = useState("로딩 중...")
   const [activeView, setActiveView] = useState("overview")
+  const [searchQuery, setSearchQuery] = useState("")
   const SSE_ENDPOINT_URL =
     process.env.NEXT_PUBLIC_SSE_ENDPOINT_URL || "http://127.0.0.1:8000/public/v1/news/sse"
-  const { lastMessage } = useSSE<any>(SSE_ENDPOINT_URL)
+  
+  // 검색어가 없으면 기본값 "경제" 사용
+  const effectiveQuery = searchQuery.trim() || "경제"
+  const { lastMessage } = useSSE<any>(SSE_ENDPOINT_URL, {
+    query: { query: effectiveQuery }
+  })
 
   // RFC822 등 다양한 날짜 문자열을 'YYYY.MM.DD'로 정규화
   const formatYMD = (dateStr?: string) => {
@@ -54,6 +61,17 @@ export default function NewsSummaryApp() {
               <p className="text-muted-foreground mt-1">뉴스 요약 및 분석 시스템</p>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="검색어 입력 (기본: 경제)"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 w-64"
+                  />
+                </div>
+              </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>{selectedDate}</span>
@@ -289,7 +307,7 @@ export default function NewsSummaryApp() {
                 <p className="text-sm text-muted-foreground">{selectedDate} 주요 뉴스 기사 및 키워드 분석</p>
               </CardHeader>
               <CardContent>
-                <NewsGrid />
+                <NewsGrid searchQuery={effectiveQuery} />
               </CardContent>
             </Card>
           </TabsContent>

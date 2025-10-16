@@ -18,11 +18,17 @@ type Article = {
   newspaper?: string
 }
 
+interface NewsGridProps {
+  searchQuery?: string
+}
+
 const SSE_ENDPOINT_URL =
   process.env.NEXT_PUBLIC_SSE_ENDPOINT_URL || "http://127.0.0.1:8000/public/v1/news/sse"
 
-export function NewsGrid() {
-  const { messages, readyState, error } = useSSE<Article | Article[]>(SSE_ENDPOINT_URL)
+export function NewsGrid({ searchQuery = "경제" }: NewsGridProps) {
+  const { messages, readyState, error } = useSSE<Article | Article[]>(SSE_ENDPOINT_URL, {
+    query: { query: searchQuery }
+  })
 
   // 도메인 추출 유틸
   const extractDomain = (url?: string) => {
