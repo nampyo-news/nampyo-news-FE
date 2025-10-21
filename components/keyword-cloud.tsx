@@ -9,9 +9,22 @@ interface KeywordCloudProps {
   topNKeywords?: TopNKeywords | null
   sideCounts?: { blue: number; red: number; middle: number }
   newsArticles?: any[]
+  overlapStyleLimit?: number
+  totalKeywordCount?: number
+  keywordFreq?: Record<string, number>
+  perSideKeywordFreq?: {
+    blue: Record<string, number>
+    red: Record<string, number>
+    middle: Record<string, number>
+  }
+  perSideTotal?: {
+    blue: number
+    red: number
+    middle: number
+  }
 }
 
-export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts, newsArticles }: KeywordCloudProps) {
+export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts, newsArticles, overlapStyleLimit = 10, totalKeywordCount = 0, keywordFreq = {}, perSideKeywordFreq, perSideTotal }: KeywordCloudProps) {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null)
 
   // 하드코딩된 기본 키워드
@@ -63,10 +76,12 @@ export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts
     const redCount = sideCounts?.red ?? 0
     const middleCount = sideCounts?.middle ?? 0
 
-    // 키워드별 비율 계산 함수
-    const getRatio = (keyword: string, arr: string[]) => {
-      const count = arr.filter(k => k === keyword).length
-      return { count, percent: allKeywordsCount ? ((count / allKeywordsCount) * 100).toFixed(2) : '0.00' }
+    // 진영별 키워드 비율 계산 함수
+    const getSideRatio = (keyword: string, side: 'blue' | 'red' | 'middle') => {
+      if (!perSideKeywordFreq || !perSideTotal) return { count: 0, percent: '0.00' };
+      const count = perSideKeywordFreq[side][keyword] || 0;
+      const total = perSideTotal[side] || 0;
+      return { count, percent: total ? ((count / total) * 100).toFixed(2) : '0.00' };
     }
 
     // 스타일 함수
@@ -87,18 +102,18 @@ export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts
             <h3 className="text-sm font-semibold text-blue-600">진보 성향 <span className="ml-1 text-xs text-blue-400">({blueCount})</span></h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            {topNKeywords.blue.slice(0, 10).map((keyword, idx) => {
+            {topNKeywords.blue.slice(0, overlapStyleLimit).map((keyword, idx) => {
               const isOverlap = overlap.has(keyword)
-              const { count, percent } = getRatio(keyword, allKeywords)
+              const { count, percent } = getSideRatio(keyword, 'blue')
               return (
                 <Badge key={`blue-${idx}`} variant="outline" className={getBadgeStyle(keyword, 'blue', isOverlap)}>
-                  {keyword} <span className="ml-1 text-xs">({count}/{allKeywordsCount}, {percent}%)</span>
+                  {keyword} <span className="ml-1 text-xs">({count}/{perSideTotal?.blue ?? 0}, {percent}%)</span>
                 </Badge>
               )
             })}
-            {topNKeywords.blue.length > 10 && (
+            {topNKeywords.blue.length > overlapStyleLimit && (
               <Badge variant="outline" className="border-blue-400 text-blue-500 border-dashed">
-                +{topNKeywords.blue.length - 10}
+                +{topNKeywords.blue.length - overlapStyleLimit}
               </Badge>
             )}
           </div>
@@ -111,18 +126,18 @@ export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts
             <h3 className="text-sm font-semibold text-gray-600">중도 성향 <span className="ml-1 text-xs text-gray-400">({middleCount})</span></h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            {topNKeywords.middle.slice(0, 10).map((keyword, idx) => {
+            {topNKeywords.middle.slice(0, overlapStyleLimit).map((keyword, idx) => {
               const isOverlap = overlap.has(keyword)
-              const { count, percent } = getRatio(keyword, allKeywords)
+              const { count, percent } = getSideRatio(keyword, 'middle')
               return (
                 <Badge key={`middle-${idx}`} variant="outline" className={getBadgeStyle(keyword, 'gray', isOverlap)}>
-                  {keyword} <span className="ml-1 text-xs">({count}/{allKeywordsCount}, {percent}%)</span>
+                  {keyword} <span className="ml-1 text-xs">({count}/{perSideTotal?.middle ?? 0}, {percent}%)</span>
                 </Badge>
               )
             })}
-            {topNKeywords.middle.length > 10 && (
+            {topNKeywords.middle.length > overlapStyleLimit && (
               <Badge variant="outline" className="border-gray-400 text-gray-500 border-dashed">
-                +{topNKeywords.middle.length - 10}
+                +{topNKeywords.middle.length - overlapStyleLimit}
               </Badge>
             )}
           </div>
@@ -135,18 +150,18 @@ export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts
             <h3 className="text-sm font-semibold text-red-600">보수 성향 <span className="ml-1 text-xs text-red-400">({redCount})</span></h3>
           </div>
           <div className="flex flex-wrap gap-2">
-            {topNKeywords.red.slice(0, 10).map((keyword, idx) => {
+            {topNKeywords.red.slice(0, overlapStyleLimit).map((keyword, idx) => {
               const isOverlap = overlap.has(keyword)
-              const { count, percent } = getRatio(keyword, allKeywords)
+              const { count, percent } = getSideRatio(keyword, 'red')
               return (
                 <Badge key={`red-${idx}`} variant="outline" className={getBadgeStyle(keyword, 'red', isOverlap)}>
-                  {keyword} <span className="ml-1 text-xs">({count}/{allKeywordsCount}, {percent}%)</span>
+                  {keyword} <span className="ml-1 text-xs">({count}/{perSideTotal?.red ?? 0}, {percent}%)</span>
                 </Badge>
               )
             })}
-            {topNKeywords.red.length > 10 && (
+            {topNKeywords.red.length > overlapStyleLimit && (
               <Badge variant="outline" className="border-red-400 text-red-500 border-dashed">
-                +{topNKeywords.red.length - 10}
+                +{topNKeywords.red.length - overlapStyleLimit}
               </Badge>
             )}
           </div>

@@ -316,38 +316,78 @@ export default function NewsSummaryApp() {
             </Card>
 
             {/* 시각화 차트 (작게, 검색과 기사 사이) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-4">
               <Card className="py-3 px-3">
                 <CardHeader className="pb-1">
                   <CardTitle className="text-base font-semibold">키워드</CardTitle>
                 </CardHeader>
                 <CardContent className="px-2">
-                  {/* 진영별 기사 수 계산 */}
+                  {/* 진영별 기사 수 계산 및 전체 키워드 빈도 계산 */}
                   {(() => {
                     const sideCounts = { blue: 0, red: 0, middle: 0 };
+                    let allKeywordsArr: string[] = [];
                     newsArticles.forEach(article => {
+                      if (Array.isArray(article.keyword)) {
+                        allKeywordsArr = allKeywordsArr.concat(article.keyword);
+                      }
                       if (!article.side) return;
                       const side = article.side.toLowerCase();
                       if (side.includes('blue') || side.includes('진보') || side.includes('좌')) sideCounts.blue++;
                       else if (side.includes('red') || side.includes('보수') || side.includes('우')) sideCounts.red++;
                       else if (side.includes('middle') || side.includes('중도')) sideCounts.middle++;
                     });
+                    // 전체 키워드 개수
+                    const totalKeywordCount = allKeywordsArr.length;
+                    // 키워드별 빈도수
+                    const keywordFreq: Record<string, number> = {};
+                    allKeywordsArr.forEach(k => {
+                      keywordFreq[k] = (keywordFreq[k] || 0) + 1;
+                    });
+
+                    // 진영별 기사 분류
+                    const blueArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('blue') || a.side.includes('진보') || a.side.includes('좌')));
+                    const redArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('red') || a.side.includes('보수') || a.side.includes('우')));
+                    const middleArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('middle') || a.side.includes('중도')));
+
+                    // 진영별 키워드 빈도 및 전체 개수
+                    function getTopKeywordsAndFreq(articles: any[], n: number) {
+                      const freq: Record<string, number> = {};
+                      let total = 0;
+                      articles.forEach(a => {
+                        if (Array.isArray(a.keyword)) {
+                          a.keyword.forEach((k: string) => {
+                            freq[k] = (freq[k] || 0) + 1;
+                            total++;
+                          });
+                        }
+                      });
+                      const top = Object.entries(freq)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, n)
+                        .map(([k]) => k);
+                      return { top, freq, total };
+                    }
+                    const blueStats = getTopKeywordsAndFreq(blueArticles, 10);
+                    const redStats = getTopKeywordsAndFreq(redArticles, 10);
+                    const middleStats = getTopKeywordsAndFreq(middleArticles, 10);
+
+                    const topNKeywords = { blue: blueStats.top, red: redStats.top, middle: middleStats.top };
+                    const perSideKeywordFreq = { blue: blueStats.freq, red: redStats.freq, middle: middleStats.freq };
+                    const perSideTotal = { blue: blueStats.total, red: redStats.total, middle: middleStats.total };
+
                     return (
                       <KeywordCloud 
                         topNKeywords={topNKeywords} 
                         sideCounts={sideCounts}
                         newsArticles={newsArticles}
+                        overlapStyleLimit={10}
+                        totalKeywordCount={totalKeywordCount}
+                        keywordFreq={keywordFreq}
+                        perSideKeywordFreq={perSideKeywordFreq}
+                        perSideTotal={perSideTotal}
                       />
                     );
                   })()}
-                </CardContent>
-              </Card>
-              <Card className="py-3 px-3">
-                <CardHeader className="pb-1">
-                  <CardTitle className="text-base font-semibold">정치 성향 분포</CardTitle>
-                </CardHeader>
-                <CardContent className="px-2">
-                  <SentimentChart />
                 </CardContent>
               </Card>
             </div>
