@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  nextjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SSE_ENDPOINT_URL: ${NEXT_PUBLIC_SSE_ENDPOINT_URL}
+    container_name: nampyo-news-fe
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SSE_ENDPOINT_URL=${NEXT_PUBLIC_SSE_ENDPOINT_URL}
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
