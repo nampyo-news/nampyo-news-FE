@@ -28,7 +28,6 @@ export default function NewsSummaryApp() {
   const [totalArticles, setTotalArticles] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [isTyping, setIsTyping] = useState(false)
   const [topNKeywords, setTopNKeywords] = useState<TopNKeywords | null>(null)
   
   // 페이지네이션 관련 상태
@@ -67,7 +66,7 @@ export default function NewsSummaryApp() {
     if (formatted) setSelectedDate(formatted)
   }, [lastMessage])
 
-  // BigKinds API 호출 함수
+  // BigKinds API 호출 함수 (검색 버튼 클릭 시에만 호출)
   const handleBigKindsSearch = async () => {
     if (!bigkindsQuery.trim()) {
       alert("검색어를 입력해주세요.")
@@ -75,7 +74,6 @@ export default function NewsSummaryApp() {
     }
 
     setIsLoading(true)
-    setIsTyping(false)
     setCurrentPage(1) // 새로운 검색 시 첫 페이지로 리셋
     try {
       const response: BigKindsResponse = await fetchBigKindsNews({
@@ -100,21 +98,6 @@ export default function NewsSummaryApp() {
       setIsLoading(false)
     }
   }
-
-  // 디바운스를 위한 타이머 효과
-  useEffect(() => {
-    if (!bigkindsQuery.trim()) {
-      setIsTyping(false)
-      return
-    }
-
-    setIsTyping(true)
-    const debounceTimer = setTimeout(() => {
-      setIsTyping(false)
-    }, 1500) // 1.5초 동안 입력이 없으면 타이핑 완료로 간주
-
-    return () => clearTimeout(debounceTimer)
-  }, [bigkindsQuery])
 
   // 분석 신문사 목록
   const PROVIDERS = ["경향신문", "한겨레", "중앙일보", "조선일보", "동아일보"]
@@ -300,16 +283,11 @@ export default function NewsSummaryApp() {
                     <Button 
                       onClick={handleBigKindsSearch} 
                       className="w-full md:w-auto"
-                      disabled={isLoading || isTyping}
+                      disabled={isLoading}
                     >
                       <Search className="h-4 w-4 mr-2" />
                       {isLoading ? "검색 중..." : "검색"}
                     </Button>
-                    {isTyping && (
-                      <span className="text-sm text-muted-foreground animate-pulse">
-                        입력 중...
-                      </span>
-                    )}
                   </div>
                 </div>
               </CardContent>
