@@ -119,29 +119,31 @@ export function KeywordCloud({ detailed = false, topNKeywords = null, sideCounts
           </div>
         </div>
 
-        {/* 중도 (Middle) */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-gray-500 rounded-full" />
-            <h3 className="text-sm font-semibold text-gray-600">중도 성향 <span className="ml-1 text-xs text-gray-400">({middleCount})</span></h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {topNKeywords.middle.slice(0, overlapStyleLimit).map((keyword, idx) => {
-              const isOverlap = overlap.has(keyword)
-              const { count, percent } = getSideRatio(keyword, 'middle')
-              return (
-                <Badge key={`middle-${idx}`} variant="outline" className={getBadgeStyle(keyword, 'gray', isOverlap)}>
-                  {keyword} <span className="ml-1 text-xs">({count}/{perSideTotal?.middle ?? 0}, {percent}%)</span>
+        {/* 중도 (Middle) - 데이터가 있을 때만 표시 */}
+        {middleCount > 0 && topNKeywords.middle.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-gray-500 rounded-full" />
+              <h3 className="text-sm font-semibold text-gray-600">중도 성향 <span className="ml-1 text-xs text-gray-400">({middleCount})</span></h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {topNKeywords.middle.slice(0, overlapStyleLimit).map((keyword, idx) => {
+                const isOverlap = overlap.has(keyword)
+                const { count, percent } = getSideRatio(keyword, 'middle')
+                return (
+                  <Badge key={`middle-${idx}`} variant="outline" className={getBadgeStyle(keyword, 'gray', isOverlap)}>
+                    {keyword} <span className="ml-1 text-xs">({count}/{perSideTotal?.middle ?? 0}, {percent}%)</span>
+                  </Badge>
+                )
+              })}
+              {topNKeywords.middle.length > overlapStyleLimit && (
+                <Badge variant="outline" className="border-gray-400 text-gray-500 border-dashed">
+                  +{topNKeywords.middle.length - overlapStyleLimit}
                 </Badge>
-              )
-            })}
-            {topNKeywords.middle.length > overlapStyleLimit && (
-              <Badge variant="outline" className="border-gray-400 text-gray-500 border-dashed">
-                +{topNKeywords.middle.length - overlapStyleLimit}
-              </Badge>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 보수 (Red) */}
         <div className="space-y-2">

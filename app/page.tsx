@@ -80,7 +80,7 @@ export default function NewsSummaryApp() {
         query: bigkindsQuery,
         from_timestamp: fromDate ? formatDateToYYYYMMDD(fromDate) : "",
         to_timestamp: toDate ? formatDateToYYYYMMDD(toDate) : "",
-        provider: ["경향신문", "한겨레", "중앙일보", "조선일보", "동아일보"],
+        provider: ["경향신문", "한겨레", "조선일보", "동아일보"],
         return_size: 5000
       })
 
@@ -100,7 +100,7 @@ export default function NewsSummaryApp() {
   }
 
   // 분석 신문사 목록
-  const PROVIDERS = ["경향신문", "한겨레", "중앙일보", "조선일보", "동아일보"]
+  const PROVIDERS = ["경향신문", "한겨레", "조선일보", "동아일보"]
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(newsArticles.length / ITEMS_PER_PAGE)
