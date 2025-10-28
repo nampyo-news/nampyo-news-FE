@@ -39,7 +39,8 @@ export interface BigKindsResponse {
  * BigKinds API에서 뉴스 정보를 가져옵니다
  */
 export async function fetchBigKindsNews(
-  request: BigKindsRequest
+  request: BigKindsRequest,
+  options?: { signal?: AbortSignal }
 ): Promise<BigKindsResponse> {
   const apiUrl = process.env.NEXT_PUBLIC_BIGKINDS_API_URL || 
     'http://localhost:8000/public/v1/news/bigkinds/get_info'
@@ -49,6 +50,7 @@ export async function fetchBigKindsNews(
     headers: {
       'Content-Type': 'application/json',
     },
+    signal: options?.signal,
     body: JSON.stringify(request),
   })
 

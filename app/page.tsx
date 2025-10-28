@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +19,7 @@ export default function NewsSummaryApp() {
   const [selectedDate, setSelectedDate] = useState("로딩 중...")
   const [activeView, setActiveView] = useState("overview")
   const [searchQuery, setSearchQuery] = useState("")
+  const [isPending, startTransition] = useTransition()
   
   // BigKinds API 관련 상태
   const [bigkindsQuery, setBigkindsQuery] = useState("")
@@ -29,6 +30,7 @@ export default function NewsSummaryApp() {
   const [isLoading, setIsLoading] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [topNKeywords, setTopNKeywords] = useState<TopNKeywords | null>(null)
+  const requestAbortRef = useRef<AbortController | null>(null)
   
   // 페이지네이션 관련 상태
   const [currentPage, setCurrentPage] = useState(1)
@@ -76,31 +78,121 @@ export default function NewsSummaryApp() {
     setIsLoading(true)
     setCurrentPage(1) // 새로운 검색 시 첫 페이지로 리셋
     try {
+      // 이전 검색 요청이 진행 중이면 취소
+      requestAbortRef.current?.abort()
+      const controller = new AbortController()
+      requestAbortRef.current = controller
+
       const response: BigKindsResponse = await fetchBigKindsNews({
         query: bigkindsQuery,
         from_timestamp: fromDate ? formatDateToYYYYMMDD(fromDate) : "",
         to_timestamp: toDate ? formatDateToYYYYMMDD(toDate) : "",
         provider: ["경향신문", "한겨레", "조선일보", "동아일보"],
         return_size: 5000
-      })
+      }, { signal: controller.signal })
 
       if (response.status === "success") {
-        setNewsArticles(response.data)
-        setTotalArticles(response.data_size || response.data.length)
-        setTopNKeywords(response.top_n_keywords || null)
+        startTransition(() => {
+          setNewsArticles(response.data)
+          setTotalArticles(response.data_size || response.data.length)
+          setTopNKeywords(response.top_n_keywords || null)
+        })
       } else {
         alert("데이터를 가져오는데 실패했습니다.")
       }
     } catch (error) {
-      console.error("BigKinds API 오류:", error)
-      alert("API 요청 중 오류가 발생했습니다.")
+      if ((error as any)?.name === 'AbortError') {
+        // 취소된 요청은 무시
+      } else {
+        console.error("BigKinds API 오류:", error)
+        alert("API 요청 중 오류가 발생했습니다.")
+      }
     } finally {
       setIsLoading(false)
+      requestAbortRef.current = null
     }
   }
 
   // 분석 신문사 목록
   const PROVIDERS = ["경향신문", "한겨레", "조선일보", "동아일보"]
+
+  // 언론사별 기사 수 집계 (렌더 최적화를 위해 메모이제이션)
+  const providerCounts = useMemo(() => {
+    const base = Object.fromEntries(PROVIDERS.map((p) => [p, 0])) as Record<string, number>
+    for (const a of newsArticles) {
+      const name = (a.provider || "").trim()
+      if (name && base[name] !== undefined) base[name] += 1
+    }
+    return base
+  }, [newsArticles])
+
+  // 언론사별 스타일 (진영 매칭)
+  const PROVIDER_STYLES: Record<string, { bar: string; text: string }> = {
+    "경향신문": { bar: "bg-blue-500", text: "text-blue-600" },
+    "한겨레": { bar: "bg-blue-500", text: "text-blue-600" },
+    "조선일보": { bar: "bg-red-500", text: "text-red-600" },
+    "동아일보": { bar: "bg-red-500", text: "text-red-600" },
+  }
+
+  const maxProviderCount = useMemo(() => {
+    const vals = Object.values(providerCounts)
+    return vals.length ? Math.max(1, ...vals) : 1
+  }, [providerCounts])
+
+  // 키워드/진영 통계 계산 (뉴스 데이터 변경시에만 계산)
+  const keywordMetrics = useMemo(() => {
+    const sideCounts = { blue: 0, red: 0, middle: 0 }
+    let allKeywordsArr: string[] = []
+    for (const article of newsArticles) {
+      if (Array.isArray(article.keyword)) {
+        allKeywordsArr = allKeywordsArr.concat(article.keyword)
+      }
+      if (!article.side) continue
+      const side = article.side.toLowerCase()
+      if (side.includes('blue') || side.includes('진보') || side.includes('좌')) sideCounts.blue++
+      else if (side.includes('red') || side.includes('보수') || side.includes('우')) sideCounts.red++
+      else if (side.includes('middle') || side.includes('중도')) sideCounts.middle++
+    }
+
+    const totalKeywordCount = allKeywordsArr.length
+    const keywordFreq: Record<string, number> = {}
+    for (const k of allKeywordsArr) keywordFreq[k] = (keywordFreq[k] || 0) + 1
+
+    const blueArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('blue') || a.side.includes('진보') || a.side.includes('좌')))
+    const redArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('red') || a.side.includes('보수') || a.side.includes('우')))
+    const middleArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('middle') || a.side.includes('중도')))
+
+    function getTopKeywordsAndFreq(articles: any[], n: number) {
+      const freq: Record<string, number> = {}
+      let total = 0
+      for (const a of articles) {
+        if (Array.isArray(a.keyword)) {
+          for (const k of a.keyword) {
+            freq[k] = (freq[k] || 0) + 1
+            total++
+          }
+        }
+      }
+      const top = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(([k]) => k)
+      return { top, freq, total }
+    }
+
+    const blueStats = getTopKeywordsAndFreq(blueArticles, 10)
+    const redStats = getTopKeywordsAndFreq(redArticles, 10)
+    const middleStats = getTopKeywordsAndFreq(middleArticles, 10)
+
+    return {
+      sideCounts,
+      totalKeywordCount,
+      keywordFreq,
+      topNKeywords: { blue: blueStats.top, red: redStats.top, middle: middleStats.top } as TopNKeywords,
+      perSideKeywordFreq: { blue: blueStats.freq, red: redStats.freq, middle: middleStats.freq },
+      perSideTotal: { blue: blueStats.total, red: redStats.total, middle: middleStats.total }
+    }
+  }, [newsArticles])
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(newsArticles.length / ITEMS_PER_PAGE)
@@ -221,12 +313,11 @@ export default function NewsSummaryApp() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeView} className="w-full">
-          {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             {/* 검색 인터페이스 */}
             <Card>
               <CardHeader>
-                <CardTitle>빅카인즈 뉴스 검색</CardTitle>
+                <CardTitle>뉴스 검색</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   키워드와 기간을 설정하여 5개 주요 신문사의 기사를 검색합니다
                 </p>
@@ -300,72 +391,16 @@ export default function NewsSummaryApp() {
                   <CardTitle className="text-base font-semibold">키워드</CardTitle>
                 </CardHeader>
                 <CardContent className="px-2">
-                  {/* 진영별 기사 수 계산 및 전체 키워드 빈도 계산 */}
-                  {(() => {
-                    const sideCounts = { blue: 0, red: 0, middle: 0 };
-                    let allKeywordsArr: string[] = [];
-                    newsArticles.forEach(article => {
-                      if (Array.isArray(article.keyword)) {
-                        allKeywordsArr = allKeywordsArr.concat(article.keyword);
-                      }
-                      if (!article.side) return;
-                      const side = article.side.toLowerCase();
-                      if (side.includes('blue') || side.includes('진보') || side.includes('좌')) sideCounts.blue++;
-                      else if (side.includes('red') || side.includes('보수') || side.includes('우')) sideCounts.red++;
-                      else if (side.includes('middle') || side.includes('중도')) sideCounts.middle++;
-                    });
-                    // 전체 키워드 개수
-                    const totalKeywordCount = allKeywordsArr.length;
-                    // 키워드별 빈도수
-                    const keywordFreq: Record<string, number> = {};
-                    allKeywordsArr.forEach(k => {
-                      keywordFreq[k] = (keywordFreq[k] || 0) + 1;
-                    });
-
-                    // 진영별 기사 분류
-                    const blueArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('blue') || a.side.includes('진보') || a.side.includes('좌')));
-                    const redArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('red') || a.side.includes('보수') || a.side.includes('우')));
-                    const middleArticles = newsArticles.filter(a => a.side && (a.side.toLowerCase().includes('middle') || a.side.includes('중도')));
-
-                    // 진영별 키워드 빈도 및 전체 개수
-                    function getTopKeywordsAndFreq(articles: any[], n: number) {
-                      const freq: Record<string, number> = {};
-                      let total = 0;
-                      articles.forEach(a => {
-                        if (Array.isArray(a.keyword)) {
-                          a.keyword.forEach((k: string) => {
-                            freq[k] = (freq[k] || 0) + 1;
-                            total++;
-                          });
-                        }
-                      });
-                      const top = Object.entries(freq)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, n)
-                        .map(([k]) => k);
-                      return { top, freq, total };
-                    }
-                    const blueStats = getTopKeywordsAndFreq(blueArticles, 10);
-                    const redStats = getTopKeywordsAndFreq(redArticles, 10);
-                    const middleStats = getTopKeywordsAndFreq(middleArticles, 10);
-
-                    const topNKeywords = { blue: blueStats.top, red: redStats.top, middle: middleStats.top };
-                    const perSideKeywordFreq = { blue: blueStats.freq, red: redStats.freq, middle: middleStats.freq };
-                    const perSideTotal = { blue: blueStats.total, red: redStats.total, middle: middleStats.total };
-
-                    return (
-                      <KeywordCloud 
-                        topNKeywords={topNKeywords} 
-                        sideCounts={sideCounts}
-                        newsArticles={newsArticles}
-                        overlapStyleLimit={10}
-                        totalKeywordCount={totalKeywordCount}
-                        keywordFreq={keywordFreq}
-                        perSideKeywordFreq={perSideKeywordFreq}
-                        perSideTotal={perSideTotal}
-                      />
-                    );
-                  })()}
+                  <KeywordCloud 
+                    topNKeywords={keywordMetrics.topNKeywords}
+                    sideCounts={keywordMetrics.sideCounts}
+                    newsArticles={newsArticles}
+                    overlapStyleLimit={10}
+                    totalKeywordCount={keywordMetrics.totalKeywordCount}
+                    keywordFreq={keywordMetrics.keywordFreq}
+                    perSideKeywordFreq={keywordMetrics.perSideKeywordFreq}
+                    perSideTotal={keywordMetrics.perSideTotal}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -383,6 +418,7 @@ export default function NewsSummaryApp() {
                   <p className="text-xs text-muted-foreground">
                     {bigkindsQuery ? `"${bigkindsQuery}" 검색 결과` : "검색어를 입력하세요"}
                   </p>
+                  {/* per-provider badges moved to '분석 신문사' card as histogram */}
                 </CardContent>
               </Card>
               <Card>
@@ -420,6 +456,24 @@ export default function NewsSummaryApp() {
                 <CardContent>
                   <div className="text-2xl font-bold text-accent">{PROVIDERS.length}개</div>
                   <p className="text-xs text-muted-foreground">주요 일간지</p>
+                  {/* 언론사별 기사 수 히스토그램 */}
+                  <div className="mt-3 space-y-2">
+                    {PROVIDERS.map((provider) => {
+                      const count = providerCounts[provider] ?? 0
+                      const percent = maxProviderCount ? (count / maxProviderCount) * 100 : 0
+                      const styles = PROVIDER_STYLES[provider] || { bar: "bg-gray-400", text: "text-gray-600" }
+                      const width = count > 0 ? Math.max(6, percent) : 0 // 최소 가시 폭 6%
+                      return (
+                        <div key={provider} className="flex items-center gap-2">
+                          <span className={`w-16 shrink-0 text-[11px] font-medium ${styles.text}`}>{provider}</span>
+                          <div className="flex-1 h-2 rounded bg-muted overflow-hidden">
+                            <div className={`h-full ${styles.bar}`} style={{ width: `${width}%` }} />
+                          </div>
+                          <span className="w-10 text-right text-[11px] text-muted-foreground">{count.toLocaleString()}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </div>
